@@ -15,6 +15,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\PackageDeployer.Core\PackageDeployer.Core.csproj" />
+      <ProjectReference Include="..\PackageDeployer.Core\PackageDeployer.Core.csproj" />
       <ProjectReference Include="..\PackageDeployer.Lang\PackageDeployer.Lang.csproj" />
     </ItemGroup>
 
