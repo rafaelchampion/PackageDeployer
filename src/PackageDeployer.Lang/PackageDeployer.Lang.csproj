@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Update="GlobalStrings.resx">
+            <Generator>PublicResXFileCodeGenerator</Generator>
+            <LastGenOutput>GlobalStrings.Designer.cs</LastGenOutput>
+            <PublicClass>true</PublicClass>
+        </EmbeddedResource>
+        <EmbeddedResource Update="GlobalStrings.pt-br.resx">
+            <Generator>PublicResXFileCodeGenerator</Generator>
+            <LastGenOutput>GlobalStrings.pt-br.Designer.cs</LastGenOutput>
+            <PublicClass>true</PublicClass>
+        </EmbeddedResource>
+        <EmbeddedResource Update="GlobalStrings.en.resx">
+            <Generator>PublicResXFileCodeGenerator</Generator>
+            <LastGenOutput>GlobalStrings.en.Designer.cs</LastGenOutput>
+            <PublicClass>true</PublicClass>
+        </EmbeddedResource>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Update="GlobalStrings.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>GlobalStrings.resx</DependentUpon>
+        </Compile>
+        <Compile Update="GlobalStrings.pt-br.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>GlobalStrings.pt-br.resx</DependentUpon>
+        </Compile>
+        <Compile Update="GlobalStrings.en.Designer.cs">
+            <DesignTime>True</DesignTime>
+            <AutoGen>True</AutoGen>
+            <DependentUpon>GlobalStrings.en.resx</DependentUpon>
+        </Compile>
+    </ItemGroup>
+
+</Project>

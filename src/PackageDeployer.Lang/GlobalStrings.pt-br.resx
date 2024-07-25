@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<root>
+    <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+        <xsd:element name="root" msdata:IsDataSet="true">
+            
+        </xsd:element>
+    </xsd:schema>
+    <resheader name="resmimetype">
+        <value>text/microsoft-resx</value>
+    </resheader>
+    <resheader name="version">
+        <value>1.3</value>
+    </resheader>
+    <resheader name="reader">
+        <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <resheader name="writer">
+        <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    </resheader>
+    <data name="Option-NewRepository" xml:space="preserve">
+        <value>Novo repositório</value>
+    </data>
+    <data name="Prompt-SelectOrCreateRepositoryConfig" xml:space="preserve">
+        <value>Selecione um repositório existente ou crie uma nova configuração de repositório</value>
+    </data>
+    <data name="Prompt-EnterRepositoryName" xml:space="preserve">
+        <value>Insira o nome do novo repositório (Projeto/Repositorio)</value>
+    </data>
+    <data name="Prompt-EnterGitHubToken" xml:space="preserve">
+        <value>Insira o token do GitHub do novo repositório</value>
+    </data>
+    <data name="Prompt-WishToSaveConfig" xml:space="preserve">
+        <value>Deseja salvar a configuração do novo repositório?</value>
+    </data>
+    <data name="Error-InvalidRepositoryFormat" xml:space="preserve">
+        <value>Erro - O formato de nome do repositório é inválido</value>
+    </data>
+    <data name="Info-CloningRepository" xml:space="preserve">
+        <value>Clonando repositório...</value>
+    </data>
+    <data name="Info-RepositoryClonedSuccessfully" xml:space="preserve">
+        <value>Repositório clonado com sucesso.</value>
+    </data>
+    <data name="Info-BuildingProject" xml:space="preserve">
+        <value>Realizando build no projeto...</value>
+    </data>
+    <data name="Info-ProjectBuiltSuccessfully" xml:space="preserve">
+        <value>Build do projeto realizada com sucesso.</value>
+    </data>
+    <data name="Prompt-EnterDestinationFolder" xml:space="preserve">
+        <value>Insira o caminho da pasta de destino da publicação</value>
+    </data>
+    <data name="Prompt-WishToSavePublishConfiguration" xml:space="preserve">
+        <value>Deseja salvar a configuração de publicação deste projeto?</value>
+    </data>
+    <data name="Info-CopyingFilesToThePublishDestinationFolder" xml:space="preserve">
+        <value>Copiando arquivos para a pasta de destino da publicação...</value>
+    </data>
+</root>
