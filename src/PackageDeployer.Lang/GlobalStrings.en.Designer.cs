@@ -114,6 +114,15 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Exit.
+        /// </summary>
+        public static string Option_Exit {
+            get {
+                return ResourceManager.GetString("Option-Exit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to New repository.
         /// </summary>
         public static string Option_NewRepository {

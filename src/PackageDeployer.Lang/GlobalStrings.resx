@@ -57,4 +57,7 @@
     <data name="Info-CopyingFilesToThePublishDestinationFolder" xml:space="preserve">
         <value>Copying files to the publish destination folder...</value>
     </data>
+    <data name="Option-Exit" xml:space="preserve">
+        <value>Exit</value>
+    </data>
 </root>
