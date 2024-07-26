@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="LibGit2Sharp" Version="0.30.0" />
       <PackageReference Include="Microsoft.Build" Version="17.10.4" ExcludeAssets="runtime" />
       <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
       <PackageReference Include="MSBuild.ProjectCreation" Version="12.0.1" />
@@ -19,6 +20,12 @@
     <ItemGroup>
       <ProjectReference Include="..\PackageDeployer.Core\PackageDeployer.Core.csproj" />
       <ProjectReference Include="..\PackageDeployer.Lang\PackageDeployer.Lang.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="nuget.exe">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

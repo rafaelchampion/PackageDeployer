@@ -1,16 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
-using Microsoft.Build.Evaluation;
-using Microsoft.Build.Execution;
-using Microsoft.Build.Framework;
-using Microsoft.Build.Locator;
-using Microsoft.Build.Logging;
-using Microsoft.Build.Utilities.ProjectCreation;
 using Octokit;
 using PackageDeployer.Core;
 using PackageDeployer.Core.Models;
 using Sharprompt;
 using Spectre.Console;
+using LibGit2Sharp;
 using Language = PackageDeployer.Lang.GlobalStrings;
 using Repository = PackageDeployer.Core.Models.Repository;
 using Branch = PackageDeployer.Core.Models.Branch;
@@ -112,26 +107,11 @@ internal class Program
         }
     }
 
-    private static List<KeyValuePair<string, string>> GetCsprojFiles(string rootFolder)
-    {
-        return Directory.GetDirectories(rootFolder, "*", SearchOption.AllDirectories)
-            .SelectMany(directory => Directory.GetFiles(directory, "*.csproj"),
-                (directory, file) => new KeyValuePair<string, string>(directory, Path.GetFileName(file)))
-            .ToList();
-    }
-
-    private static string RemoveFileExtension(string fileName, string extensionToRemove)
-    {
-        return fileName.EndsWith(extensionToRemove, StringComparison.OrdinalIgnoreCase)
-            ? fileName.Substring(0, fileName.Length - extensionToRemove.Length)
-            : fileName;
-    }
-
     private static List<KeyValuePair<Guid, string>> BuildMainMenuOptions(Config repoConfig)
     {
         var keyValuePairs = repoConfig.Repositories
             .OrderByDescending(repository => repository.LastUsed)
-            .Select(repository => new KeyValuePair<Guid, string>(repository.Id, repository.Name!))
+            .Select(repository => new KeyValuePair<Guid, string>(repository.Id, repository.Name))
             .ToList();
 
         keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Parse("99999999-9999-9999-9999-999999999999"),
@@ -179,7 +159,7 @@ internal class Program
 
         var client = new GitHubClient(new ProductHeaderValue("GitHubBranchDownloader"))
         {
-            Credentials = new Credentials(token)
+            Credentials = new Octokit.Credentials(token)
         };
 
         try
@@ -193,7 +173,12 @@ internal class Program
             var branch = repository.Branches.First(b => b.Name == branchName);
             branch.LastUsed = DateTime.Now;
 
-            var localRepoPath = CloneRepository(owner, repo, branchName);
+            var localRepoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "repositories", repo);
+
+            await CloneOrUpdateRepository(owner, repo, branchName, token, localRepoPath);
+
+            SwitchToBranch(localRepoPath, branchName);
+
             var csprojFiles = GetCsprojFiles(localRepoPath);
             SynchronizeProjects(branch, csprojFiles);
             ConfigUtil.SaveConfig(_configPath, _config);
@@ -203,6 +188,7 @@ internal class Program
             project.LastUsed = DateTime.Now;
 
             var projectPath = csprojFiles.First(x => RemoveFileExtension(x.Value, ".csproj") == projectName).Key;
+            var projectFolder = projectPath.Replace(projectName + ".csproj", "");
             var publishFolder = GetPublishFolder(branchName, projectName, repoName);
 
             var configuration = AnsiConsole.Confirm(Language.Prompt_UseReleaseConfiguration_) ? "Release" : "Debug";
@@ -211,7 +197,7 @@ internal class Program
                 configuration = "Release";
             }
 
-            var isDotNetCoreOrHigher = IsDotNetCoreOrHigher(projectPath);
+            var isDotNetCoreOrHigher = IsDotNetCoreOrHigher(projectFolder);
 
             PublishProject(projectPath, isDotNetCoreOrHigher, configuration);
 
@@ -224,40 +210,227 @@ internal class Program
         }
     }
 
-    private static void FinishDeploy()
+    private static void SwitchToBranch(string localRepoPath, string branchName)
     {
-        AnsiConsole.MarkupLine($"[green]{Language.Info_DeploymentFinish}[/]");
-        AnsiConsole.MarkupLine($"{Language.Prompt_PressToFinish}");
-        Console.ReadKey();
-        Console.Clear();
-    }
-
-    private static void CopyBuildOutputToPublishFolder(string projectPath, string publishFolder)
-    {
-        AnsiConsole.MarkupLine($"[blue]{Language.Info_FileCopyStarted}[/]");
-        AnsiConsole.Status().Start(Language.Info_CopyingFilesToThePublishDestinationFolder, ctx =>
+        using var repo = new LibGit2Sharp.Repository(localRepoPath);
+        var branch = repo.Branches.Select(x => x.FriendlyName).FirstOrDefault(x => x == branchName);
+        if (branch != null)
         {
-            FileCopier.CopyFilesRecursively(new DirectoryInfo(_buildOutputPath), new DirectoryInfo(publishFolder));
-            ctx.Status(Language.Info_CopyingFilesToThePublishDestinationFolder);
-        });
-        AnsiConsole.MarkupLine($"[green]{Language.Info_FilesCopiedSuccessfully}[/]");
+            Commands.Checkout(repo, branch);
+        }
     }
 
-    private static void SavePublishConfiguration(string repoName, string branchName, string projectName,
-        string publishFolder)
+    private static async Task<string> CloneOrUpdateRepository(string owner, string repo, string branchName,
+        string token, string localRepoPath)
     {
-        var repository = _config.Repositories.FirstOrDefault(x => x.Name == repoName) ??
-                         new Repository() { Name = repoName };
-        var branch = repository.Branches.FirstOrDefault(x => x.Name == branchName) ??
-                     new Branch() { Name = branchName };
-        var project = branch.Projects.FirstOrDefault(x => x.Name == projectName) ??
-                      new Project() { Name = projectName, PublishFolder = publishFolder };
+        if (!Directory.Exists(localRepoPath))
+        {
+            Directory.CreateDirectory(localRepoPath);
+        }
 
-        branch.Projects.Add(project);
-        repository.Branches.Add(branch);
-        _config.Repositories.Add(repository);
+        var client = new GitHubClient(new ProductHeaderValue("GitHubBranchDownloader"))
+        {
+            Credentials = new Octokit.Credentials(token)
+        };
 
-        ConfigUtil.SaveConfig(_configPath, _config);
+        try
+        {
+            var repoDir = new DirectoryInfo(localRepoPath);
+
+            if (repoDir.Exists && Directory.GetFiles(localRepoPath).Length > 0)
+            {
+                var remoteCommits =
+                    await client.Repository.Commit.GetAll(owner, repo, new CommitRequest { Sha = branchName });
+                var localCommits = await GetLocalCommits(localRepoPath, branchName);
+
+                var commitsToUpdate = remoteCommits.Except(localCommits).ToList();
+                if (commitsToUpdate.Any())
+                {
+                    await UpdateRepository(localRepoPath, owner, repo, branchName);
+                }
+            }
+            else
+            {
+                await CloneRepository(owner, repo, branchName, localRepoPath);
+            }
+
+            return localRepoPath;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]{Language.Error_CloningOrUpdatingRepository} {ex.Message}[/]");
+            throw;
+        }
+    }
+
+    private static async Task CloneRepository(string owner, string repo, string branchName, string localRepoPath)
+    {
+        AnsiConsole.Status().Start(Language.Info_CloningRepository, ctx =>
+        {
+            var cloneProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = $"clone --branch {branchName} https://github.com/{owner}/{repo}.git {localRepoPath}",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            cloneProcess?.WaitForExit();
+            ctx.Status(Language.Info_RepositoryClonedSuccessfully);
+        });
+    }
+
+    private static async Task UpdateRepository(string localRepoPath, string owner, string repo, string branchName)
+    {
+        AnsiConsole.Status().Start(Language.Info_UpdatingRepository, ctx =>
+        {
+            var fetchProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = $"fetch --all",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = localRepoPath
+            });
+
+            fetchProcess?.WaitForExit();
+
+            var checkoutProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = $"checkout {branchName}",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = localRepoPath
+            });
+
+            checkoutProcess?.WaitForExit();
+
+            var pullProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "git",
+                Arguments = $"pull origin {branchName}",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = localRepoPath
+            });
+
+            pullProcess?.WaitForExit();
+            ctx.Status(Language.Info_RepositoryUpdatedSuccessfully);
+        });
+    }
+
+    private static async Task<IReadOnlyList<GitHubCommit>> GetLocalCommits(string localRepoPath, string branchName)
+    {
+        var commitList = new List<GitHubCommit>();
+
+        var commitProcess = Process.Start(new ProcessStartInfo
+        {
+            FileName = "git",
+            Arguments = $"log {branchName} --pretty=format:\"%H\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = localRepoPath
+        });
+
+        if (commitProcess != null)
+        {
+            using var reader = commitProcess.StandardOutput;
+            while (await reader.ReadLineAsync() is { } commitHash)
+            {
+                commitList.Add(new GitHubCommit("", "", "", "", commitHash, null, null, null, null, null, null, null,
+                    null, null, null));
+            }
+        }
+
+        await commitProcess?.WaitForExitAsync()!;
+        return commitList;
+    }
+
+    private static string SelectBranch(Repository repository)
+    {
+        var options = BuildBranchOptions(repository);
+        var option = Prompt.Select(Language.Prompt_SelectOrCreateBranchConfig, options, null, null,
+            kvp => $"{kvp.Value}");
+        return option.Value;
+    }
+
+    private static List<KeyValuePair<Guid, string>> BuildBranchOptions(Repository repository)
+    {
+        var keyValuePairs = repository.Branches
+            .OrderByDescending(branch => branch.LastUsed)
+            .Select(branch => new KeyValuePair<Guid, string>(branch.Id, branch.Name!))
+            .ToList();
+        // keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Empty, $"--- {Language.Option_Exit} ---"));
+
+        return keyValuePairs;
+    }
+
+    private static Dictionary<string, string> GetCsprojFiles(string localRepoPath)
+    {
+        var csprojFiles = Directory.GetFiles(localRepoPath, "*.csproj", SearchOption.AllDirectories)
+            .ToDictionary(csprojFile => csprojFile, Path.GetFileName);
+
+        return csprojFiles!;
+    }
+
+    private static string SelectProject(Branch branch)
+    {
+        var options = BuildProjectOptions(branch);
+        var option = Prompt.Select(Language.Prompt_SelectOrCreateProjectConfig, options, null, null,
+            kvp => $"{kvp.Value}");
+        return option.Value;
+    }
+
+    private static List<KeyValuePair<Guid, string>> BuildProjectOptions(Branch branch)
+    {
+        var keyValuePairs = branch.Projects
+            .OrderByDescending(project => project.LastUsed)
+            .Select(project => new KeyValuePair<Guid, string>(project.Id, project.Name!))
+            .ToList();
+        // keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Empty, $"--- {Language.Option_Exit} ---"));
+
+        return keyValuePairs;
+    }
+
+    private static string RemoveFileExtension(string fileName, string extensionToRemove)
+    {
+        return fileName.EndsWith(extensionToRemove, StringComparison.OrdinalIgnoreCase)
+            ? fileName.Substring(0, fileName.Length - extensionToRemove.Length)
+            : fileName;
+    }
+
+    private static void SynchronizeBranches(Repository repository, IReadOnlyList<Octokit.Branch> githubBranches)
+    {
+        var githubBranchNames = githubBranches.Select(b => b.Name).ToList();
+        foreach (var branch in from branchName in githubBranchNames
+                 let branch = repository.Branches.FirstOrDefault(b => b.Name == branchName)
+                 where branch == null
+                 select new Branch { Name = branchName })
+        {
+            repository.Branches.Add(branch);
+        }
+
+        repository.Branches.RemoveAll(b => !githubBranchNames.Contains(b.Name));
+    }
+
+    private static void SynchronizeProjects(Branch branch, Dictionary<string, string> csprojFiles)
+    {
+        var projectNames = csprojFiles.Values.Select(csprojFile => RemoveFileExtension(csprojFile, ".csproj")).ToList();
+        branch.Projects.RemoveAll(p => !projectNames.Contains(p.Name));
+        foreach (var csprojFile in csprojFiles.Values)
+        {
+            var projectName = RemoveFileExtension(csprojFile, ".csproj");
+            if (branch.Projects.All(p => p.Name != projectName))
+            {
+                branch.Projects.Add(new Project { Id = Guid.NewGuid(), Name = projectName });
+            }
+        }
     }
 
     private static string GetPublishFolder(string branchName, string projectName, string repoName)
@@ -300,6 +473,18 @@ internal class Program
         return publishFolder;
     }
 
+    private static bool IsDotNetCoreOrHigher(string projectPath)
+    {
+        var csprojFile = Directory.GetFiles(projectPath, "*.csproj").FirstOrDefault();
+        if (csprojFile == null)
+        {
+            throw new FileNotFoundException("Project file (.csproj) not found in the specified directory.");
+        }
+
+        var lines = File.ReadAllLines(csprojFile);
+        return lines.Any(line => line.Contains("<TargetFramework>netcoreapp") || line.Contains("<TargetFramework>net"));
+    }
+
     private static void PublishProject(string projectPath, bool isDotNetCoreOrHigher, string configuration)
     {
         CleanDirectory(_buildOutputPath);
@@ -311,10 +496,94 @@ internal class Program
         }
         else
         {
+            RestoreNugetPackages(projectPath);
             PublishUsingMsBuild(projectPath, configuration);
         }
 
         AnsiConsole.MarkupLine($"[green]{Language.Info_ProjectBuiltSuccessfully}[/]");
+    }
+
+    private static void CopyBuildOutputToPublishFolder(string projectPath, string publishFolder)
+    {
+        AnsiConsole.MarkupLine($"[blue]{Language.Info_FileCopyStarted}[/]");
+        AnsiConsole.Status().Start(Language.Info_CopyingFilesToThePublishDestinationFolder, ctx =>
+        {
+            FileCopier.CopyFilesRecursively(new DirectoryInfo(_buildOutputPath), new DirectoryInfo(publishFolder));
+            ctx.Status(Language.Info_CopyingFilesToThePublishDestinationFolder);
+        });
+        AnsiConsole.MarkupLine($"[green]{Language.Info_FilesCopiedSuccessfully}[/]");
+    }
+
+    private static void FinishDeploy()
+    {
+        AnsiConsole.MarkupLine($"[green]{Language.Info_DeploymentFinish}[/]");
+        AnsiConsole.MarkupLine($"{Language.Prompt_PressToFinish}");
+        Console.ReadKey();
+        Console.Clear();
+    }
+
+    private static void SavePublishConfiguration(string repoName, string branchName, string projectName,
+        string publishFolder)
+    {
+        var repository = _config.Repositories.FirstOrDefault(x => x.Name == repoName) ??
+                         new Repository() { Name = repoName };
+        var branch = repository.Branches.FirstOrDefault(x => x.Name == branchName) ??
+                     new Branch() { Name = branchName };
+        var project = branch.Projects.FirstOrDefault(x => x.Name == projectName) ??
+                      new Project() { Name = projectName, PublishFolder = publishFolder };
+
+        branch.Projects.Add(project);
+        repository.Branches.Add(branch);
+        _config.Repositories.Add(repository);
+
+        ConfigUtil.SaveConfig(_configPath, _config);
+    }
+
+
+    private static void RestoreNugetPackages(string projectPath)
+    {
+        var solutionFile = Directory.GetFiles(Path.GetDirectoryName(projectPath), "*.sln").FirstOrDefault();
+        if (solutionFile == null)
+        {
+            AnsiConsole.MarkupLine("[red]Solution file (.sln) not found in the project directory.[/]");
+            return;
+        }
+
+        var nugetExePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "nuget.exe");
+        if (!File.Exists(nugetExePath))
+        {
+            AnsiConsole.MarkupLine("[red]nuget.exe not found in the project root directory.[/]");
+            return;
+        }
+
+        var nugetRestoreProcessStartInfo = new ProcessStartInfo
+        {
+            FileName = nugetExePath,
+            Arguments = $"restore \"{solutionFile}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        var nugetRestoreProcess = Process.Start(nugetRestoreProcessStartInfo);
+        // nugetRestoreProcess.OutputDataReceived += (sender, args) =>
+        // {
+        //     if (args.Data != null)
+        //     {
+        //         AnsiConsole.WriteLine(Markup.Escape(args.Data));
+        //     }
+        // };
+        // nugetRestoreProcess.ErrorDataReceived += (sender, args) =>
+        // {
+        //     if (args.Data != null)
+        //     {
+        //         AnsiConsole.WriteLine(Markup.Escape(args.Data));
+        //     }
+        // };
+        // nugetRestoreProcess.BeginOutputReadLine();
+        // nugetRestoreProcess.BeginErrorReadLine();
+        nugetRestoreProcess.WaitForExit();
     }
 
     private static void PublishUsingDotNet(string projectPath, string configuration)
@@ -364,23 +633,23 @@ internal class Program
         AnsiConsole.Status().Start(Language.Info_BuildingProject, ctx =>
         {
             var publishProcess = Process.Start(processStartInfo);
-            publishProcess.OutputDataReceived += (_, e) =>
-            {
-                if (e.Data != null)
-                {
-                    AnsiConsole.MarkupLine(Markup.Escape(e.Data));
-                }
-            };
-            publishProcess.ErrorDataReceived +=
-                (_, e) =>
-                {
-                    if (e.Data != null)
-                    {
-                        AnsiConsole.MarkupLine($"[red]{Markup.Escape(e.Data)}[/]");
-                    }
-                };
-            publishProcess.BeginOutputReadLine();
-            publishProcess.BeginErrorReadLine();
+            // publishProcess.OutputDataReceived += (_, e) =>
+            // {
+            //     if (e.Data != null)
+            //     {
+            //         AnsiConsole.MarkupLine(Markup.Escape(e.Data));
+            //     }
+            // };
+            // publishProcess.ErrorDataReceived +=
+            //     (_, e) =>
+            //     {
+            //         if (e.Data != null)
+            //         {
+            //             AnsiConsole.MarkupLine($"[red]{Markup.Escape(e.Data)}[/]");
+            //         }
+            //     };
+            // publishProcess.BeginOutputReadLine();
+            // publishProcess.BeginErrorReadLine();
             publishProcess.WaitForExit();
 
             if (publishProcess.ExitCode != 0)
@@ -438,18 +707,6 @@ internal class Program
         }
     }
 
-    private static bool IsDotNetCoreOrHigher(string projectPath)
-    {
-        var csprojFile = Directory.GetFiles(projectPath, "*.csproj").FirstOrDefault();
-        if (csprojFile == null)
-        {
-            throw new FileNotFoundException("Project file (.csproj) not found in the specified directory.");
-        }
-
-        var lines = File.ReadAllLines(csprojFile);
-        return lines.Any(line => line.Contains("<TargetFramework>netcoreapp") || line.Contains("<TargetFramework>net"));
-    }
-
 
     private static void CleanDirectory(string directoryPath)
     {
@@ -472,45 +729,10 @@ internal class Program
         }
     }
 
-    private static string SelectProject(Branch branch)
-    {
-        var projectsOptions = branch.Projects
-            .OrderByDescending(project => project.LastUsed)
-            .Select((project, index) =>
-                new KeyValuePair<int, string>(index + 1, RemoveFileExtension(project.Name, ".csproj")))
-            .ToList();
-
-        var selectedProject = Prompt.Select($"{Language.Prompt_SelectProject}", projectsOptions, null, null,
-            kvp => $"{kvp.Key} - {kvp.Value}");
-
-        var project = branch.Projects.First(p => p.Name == selectedProject.Value);
-        project.LastUsed = DateTime.Now;
-        ConfigUtil.SaveConfig(_configPath, _config);
-
-        return selectedProject.Value;
-    }
-
-    private static string SelectBranch(Repository repository)
-    {
-        var branchesOptions = repository.Branches
-            .OrderByDescending(branch => branch.LastUsed)
-            .Select((branch, index) => new KeyValuePair<int, string>(index + 1, branch.Name))
-            .ToList();
-
-        var selectedBranch = Prompt.Select($"{Language.Prompt_SelectBranch}", branchesOptions, null, null,
-            kvp => $"{kvp.Value}");
-
-        var branch = repository.Branches.First(b => b.Name == selectedBranch.Value);
-        branch.LastUsed = DateTime.Now;
-        ConfigUtil.SaveConfig(_configPath, _config);
-
-        return selectedBranch.Value;
-    }
 
     private static string CloneRepository(string owner, string repo, string branchName)
     {
-        var localRepoPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Publish",
-            repo);
+        var localRepoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "repositories", repo);
 
         if (!Directory.Exists(localRepoPath))
         {
@@ -561,33 +783,5 @@ internal class Program
         }
 
         ConfigUtil.SaveConfig(configPath, config);
-    }
-
-    private static void SynchronizeBranches(Repository repository, IReadOnlyList<Octokit.Branch> githubBranches)
-    {
-        var githubBranchNames = githubBranches.Select(b => b.Name).ToList();
-        foreach (var branch in from branchName in githubBranchNames
-                 let branch = repository.Branches.FirstOrDefault(b => b.Name == branchName)
-                 where branch == null
-                 select new Branch { Name = branchName })
-        {
-            repository.Branches.Add(branch);
-        }
-
-        repository.Branches.RemoveAll(b => !githubBranchNames.Contains(b.Name));
-    }
-
-    private static void SynchronizeProjects(Branch branch, List<KeyValuePair<string, string>> csprojFiles)
-    {
-        var projectNames = csprojFiles.Select(f => RemoveFileExtension(f.Value, ".csproj")).ToList();
-        foreach (var project in from projectName in projectNames
-                 let project = branch.Projects.FirstOrDefault(p => p.Name == projectName)
-                 where project == null
-                 select new Project { Name = projectName })
-        {
-            branch.Projects.Add(project);
-        }
-
-        branch.Projects.RemoveAll(p => !projectNames.Contains(p.Name));
     }
 }

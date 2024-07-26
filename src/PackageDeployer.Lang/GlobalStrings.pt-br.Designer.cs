@@ -60,6 +60,15 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Erro ao clonar/atualizar repositório..
+        /// </summary>
+        public static string Error_CloningOrUpdatingRepository {
+            get {
+                return ResourceManager.GetString("Error_CloningOrUpdatingRepository", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Ferramenta de build do DotNet não encontrada..
         /// </summary>
         public static string Error_DotNetNotFound {
@@ -258,6 +267,24 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Repositório atualizado com sucesso..
+        /// </summary>
+        public static string Info_RepositoryUpdatedSuccessfully {
+            get {
+                return ResourceManager.GetString("Info_RepositoryUpdatedSuccessfully", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Atualizando repositório....
+        /// </summary>
+        public static string Info_UpdatingRepository {
+            get {
+                return ResourceManager.GetString("Info-UpdatingRepository", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Utilizando a seguinte pasta para publicação:.
         /// </summary>
         public static string Info_UsingPublishFolder {
@@ -272,6 +299,24 @@ namespace PackageDeployer.Lang {
         public static string Option_Exit {
             get {
                 return ResourceManager.GetString("Option-Exit", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Nova branch.
+        /// </summary>
+        public static string Option_NewBranch {
+            get {
+                return ResourceManager.GetString("Option-NewBranch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Novo projeto.
+        /// </summary>
+        public static string Option_NewProject {
+            get {
+                return ResourceManager.GetString("Option_NewProject", resourceCulture);
             }
         }
         
@@ -326,6 +371,24 @@ namespace PackageDeployer.Lang {
         public static string Prompt_SelectBranch {
             get {
                 return ResourceManager.GetString("Prompt-SelectBranch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Selecione uma configuração de branch existente ou crie uma nova..
+        /// </summary>
+        public static string Prompt_SelectOrCreateBranchConfig {
+            get {
+                return ResourceManager.GetString("Prompt_SelectOrCreateBranchConfig", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Selecione uma configuração de projeto existente ou crie uma nova..
+        /// </summary>
+        public static string Prompt_SelectOrCreateProjectConfig {
+            get {
+                return ResourceManager.GetString("Prompt_SelectOrCreateProjectConfig", resourceCulture);
             }
         }
         

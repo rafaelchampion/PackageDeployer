@@ -126,4 +126,25 @@
     <data name="Error_DotNetNotFound" xml:space="preserve">
         <value>Ferramenta de build do DotNet não encontrada.</value>
     </data>
+    <data name="Error_CloningOrUpdatingRepository" xml:space="preserve">
+        <value>Erro ao clonar/atualizar repositório.</value>
+    </data>
+    <data name="Info-UpdatingRepository" xml:space="preserve">
+        <value>Atualizando repositório...</value>
+    </data>
+    <data name="Info_RepositoryUpdatedSuccessfully" xml:space="preserve">
+        <value>Repositório atualizado com sucesso.</value>
+    </data>
+    <data name="Prompt_SelectOrCreateBranchConfig" xml:space="preserve">
+        <value>Selecione uma configuração de branch existente ou crie uma nova.</value>
+    </data>
+    <data name="Option-NewBranch" xml:space="preserve">
+        <value>Nova branch</value>
+    </data>
+    <data name="Prompt_SelectOrCreateProjectConfig" xml:space="preserve">
+        <value>Selecione uma configuração de projeto existente ou crie uma nova.</value>
+    </data>
+    <data name="Option_NewProject" xml:space="preserve">
+        <value>Novo projeto</value>
+    </data>
 </root>

@@ -126,4 +126,25 @@
     <data name="Error_DotNetNotFound" xml:space="preserve">
         <value>DotNet (build) not found.</value>
     </data>
+    <data name="Error_CloningOrUpdatingRepository" xml:space="preserve">
+        <value>Error cloning/updating repository.</value>
+    </data>
+    <data name="Info-UpdatingRepository" xml:space="preserve">
+        <value>Updating repository...</value>
+    </data>
+    <data name="Info_RepositoryUpdatedSuccessfully" xml:space="preserve">
+        <value>Repository updated successfully.</value>
+    </data>
+    <data name="Prompt_SelectOrCreateBranchConfig" xml:space="preserve">
+        <value>Select an existing branch configuration or create a new one.</value>
+    </data>
+    <data name="Option-NewBranch" xml:space="preserve">
+        <value>New branch</value>
+    </data>
+    <data name="Prompt_SelectOrCreateProjectConfig" xml:space="preserve">
+        <value>Select an existing project configuration or create a new one.</value>
+    </data>
+    <data name="Option_NewProject" xml:space="preserve">
+        <value>New project</value>
+    </data>
 </root>
