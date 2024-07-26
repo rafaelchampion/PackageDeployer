@@ -60,4 +60,70 @@
     <data name="Option-Exit" xml:space="preserve">
         <value>Sair</value>
     </data>
+    <data name="Error-MainLoop" xml:space="preserve">
+        <value>Ocorreu um erro no loop principal:</value>
+    </data>
+    <data name="Error-HandleNewRepository" xml:space="preserve">
+        <value>Ocorreu um erro ao processar o novo repositório:</value>
+    </data>
+    <data name="Error-RepositoryNotFound" xml:space="preserve">
+        <value>Repositório não encontrado</value>
+    </data>
+    <data name="Error-HandleExistingRepository" xml:space="preserve">
+        <value>Ocorreu um erro ao processar o repositório existente</value>
+    </data>
+    <data name="Error-ProcessingRepository" xml:space="preserve">
+        <value>Ocorreu um erro ao processar o repositório:</value>
+    </data>
+    <data name="Prompt-SelectProject" xml:space="preserve">
+        <value>Selecione um projeto</value>
+    </data>
+    <data name="Prompt-SelectBranch" xml:space="preserve">
+        <value>Selecione uma branch</value>
+    </data>
+    <data name="Info-PublishFolderFound" xml:space="preserve">
+        <value>Pasta de publicação encontrada em:</value>
+    </data>
+    <data name="Prompt-WishToUseExistingPublishFolder" xml:space="preserve">
+        <value>Deseja utilizar a pasta de publicação existente?</value>
+    </data>
+    <data name="Info-UsingPublishFolder" xml:space="preserve">
+        <value>Utilizando a seguinte pasta para publicação:</value>
+    </data>
+    <data name="Info-ProjectBuildStarted" xml:space="preserve">
+        <value>Build do projeto iniciada.</value>
+    </data>
+    <data name="Info-FileCopyStarted" xml:space="preserve">
+        <value>Iniciada a transferência dos arquivos para a pasta de publicação.</value>
+    </data>
+    <data name="Info-DeploymentFinish" xml:space="preserve">
+        <value>Publicação finalizada!</value>
+    </data>
+    <data name="Info-FilesCopiedSuccessfully" xml:space="preserve">
+        <value>Arquivos transferidos com sucesso.</value>
+    </data>
+    <data name="Prompt-PressToFinish" xml:space="preserve">
+        <value>Pressione qualquer tecla para finalizar</value>
+    </data>
+    <data name="Prompt_UseReleaseConfiguration " xml:space="preserve">
+        <value>Deseja utilizar a configuração Release? (Caso não, a configuração Debug será utilizada)</value>
+    </data>
+    <data name="Info_ProjectPublishStarted " xml:space="preserve">
+        <value>Publicação do projeto iniciada.</value>
+    </data>
+    <data name="Info_PublishingProject " xml:space="preserve">
+        <value>Publicando projeto...</value>
+    </data>
+    <data name="Info_ProjectPublishedSuccessfully " xml:space="preserve">
+        <value>Projeto publicado com sucesso.</value>
+    </data>
+    <data name="Error_ProjectPublishFailed" xml:space="preserve">
+        <value>Publicação do projeto falhou.</value>
+    </data>
+    <data name="Error_MSBuildNotFound" xml:space="preserve">
+        <value>MSBuild não encontrado.</value>
+    </data>
+    <data name="Error_DotNetNotFound" xml:space="preserve">
+        <value>Ferramenta de build do DotNet não encontrada.</value>
+    </data>
 </root>

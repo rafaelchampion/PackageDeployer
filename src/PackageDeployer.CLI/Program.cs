@@ -1,5 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
+using Microsoft.Build.Evaluation;
+using Microsoft.Build.Execution;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Locator;
+using Microsoft.Build.Logging;
+using Microsoft.Build.Utilities.ProjectCreation;
 using Octokit;
 using PackageDeployer.Core;
 using PackageDeployer.Core.Models;
@@ -15,6 +21,7 @@ namespace PackageDeployer.CLI;
 internal class Program
 {
     private static bool _run = true;
+    private static string _buildOutputPath;
     private static string _configPath;
     private static Config _config;
 
@@ -33,6 +40,7 @@ internal class Program
         Language.Culture = CultureInfo.GetCultureInfo(CultureInfo.CurrentCulture.ToString());
         var exePath = AppDomain.CurrentDomain.BaseDirectory;
         _configPath = Path.Combine(exePath, "config.json");
+        _buildOutputPath = Path.Combine(exePath, "build");
         _config = ConfigUtil.LoadConfig(_configPath);
     }
 
@@ -47,7 +55,8 @@ internal class Program
         try
         {
             var options = BuildMainMenuOptions(_config);
-            var selectedOption = Prompt.Select(Language.Prompt_SelectOrCreateRepositoryConfig, options, null, null, kvp => $"{kvp.Value}");
+            var selectedOption = Prompt.Select(Language.Prompt_SelectOrCreateRepositoryConfig, options, null, null,
+                kvp => $"{kvp.Value}");
             switch (selectedOption.Key)
             {
                 case var id when id == Guid.Empty:
@@ -63,7 +72,7 @@ internal class Program
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]An error occurred during the main loop: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]{Language.Error_MainLoop} {ex.Message}[/]");
         }
     }
 
@@ -76,10 +85,10 @@ internal class Program
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]An error occurred while handling a new repository: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]{Language.Error_HandleNewRepository}: {ex.Message}[/]");
         }
     }
-    
+
     private static async Task HandleExistingRepositoryAsync(KeyValuePair<Guid, string> selectedOption)
     {
         try
@@ -87,22 +96,27 @@ internal class Program
             var repositoryOption = _config.Repositories.FirstOrDefault(x => x.Name == selectedOption.Value);
             if (repositoryOption == null)
             {
-                AnsiConsole.MarkupLine($"[red]Repository not found: {selectedOption.Value}[/]");
+                AnsiConsole.MarkupLine($"[red]{Language.Error_RepositoryNotFound}: {selectedOption.Value}[/]");
                 return;
             }
+
+            repositoryOption.LastUsed = DateTime.Now;
+            ConfigUtil.SaveConfig(_configPath, _config);
+
             var repoName = LoadExistingRepository(repositoryOption, out var repoParts, out var token);
             await ProcessRepositoryAsync(repoParts, token, repoName);
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]An error occurred while handling an existing repository: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]{Language.Error_HandleExistingRepository}: {ex.Message}[/]");
         }
     }
 
     private static List<KeyValuePair<string, string>> GetCsprojFiles(string rootFolder)
     {
         return Directory.GetDirectories(rootFolder, "*", SearchOption.AllDirectories)
-            .SelectMany(directory => Directory.GetFiles(directory, "*.csproj"), (directory, file) => new KeyValuePair<string, string>(directory, Path.GetFileName(file)))
+            .SelectMany(directory => Directory.GetFiles(directory, "*.csproj"),
+                (directory, file) => new KeyValuePair<string, string>(directory, Path.GetFileName(file)))
             .ToList();
     }
 
@@ -116,11 +130,13 @@ internal class Program
     private static List<KeyValuePair<Guid, string>> BuildMainMenuOptions(Config repoConfig)
     {
         var keyValuePairs = repoConfig.Repositories
+            .OrderByDescending(repository => repository.LastUsed)
             .Select(repository => new KeyValuePair<Guid, string>(repository.Id, repository.Name!))
             .ToList();
 
-        keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Parse("99999999-9999-9999-9999-999999999999"), Language.Option_NewRepository));
-        keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Empty, Language.Option_Exit));
+        keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Parse("99999999-9999-9999-9999-999999999999"),
+            $"+++ {Language.Option_NewRepository} +++"));
+        keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Empty, $"--- {Language.Option_Exit} ---"));
 
         return keyValuePairs;
     }
@@ -144,8 +160,6 @@ internal class Program
         } while (repoParts.Length != 2);
 
         token = AnsiConsole.Ask<string>(Language.Prompt_EnterGitHubToken);
-        var saveToken = AnsiConsole.Confirm(Language.Prompt_WishToSaveConfig);
-        if (!saveToken) return repoName;
         _config.Repositories.Add(new Repository() { Name = repoName, GitHubToken = token });
         ConfigUtil.SaveConfig(_configPath, _config);
         return repoName;
@@ -157,7 +171,7 @@ internal class Program
         token = repository.GitHubToken;
         return repository.Name;
     }
-    
+
     private static async Task ProcessRepositoryAsync(string[] repoParts, string token, string repoName)
     {
         var owner = repoParts[0];
@@ -170,42 +184,74 @@ internal class Program
 
         try
         {
-            var branches = await client.Repository.Branch.GetAll(owner, repo);
-            var branchName = SelectBranch(branches);
+            var repository = _config.Repositories.First(r => r.Name == repoName);
+            var githubBranches = await client.Repository.Branch.GetAll(owner, repo);
+            SynchronizeBranches(repository, githubBranches);
+            ConfigUtil.SaveConfig(_configPath, _config);
+
+            var branchName = SelectBranch(repository);
+            var branch = repository.Branches.First(b => b.Name == branchName);
+            branch.LastUsed = DateTime.Now;
+
             var localRepoPath = CloneRepository(owner, repo, branchName);
+            var csprojFiles = GetCsprojFiles(localRepoPath);
+            SynchronizeProjects(branch, csprojFiles);
+            ConfigUtil.SaveConfig(_configPath, _config);
 
-            var projects = GetCsprojFiles(localRepoPath);
-            var projectName = SelectProject(projects);
+            var projectName = SelectProject(branch);
+            var project = branch.Projects.First(p => p.Name == projectName);
+            project.LastUsed = DateTime.Now;
 
-            var projectPath = projects.First(x => RemoveFileExtension(x.Value, ".csproj") == projectName).Key;
-            BuildProject(projectPath);
-
+            var projectPath = csprojFiles.First(x => RemoveFileExtension(x.Value, ".csproj") == projectName).Key;
             var publishFolder = GetPublishFolder(branchName, projectName, repoName);
-            CopyBuildOutputToPublishFolder(projectPath, publishFolder);
 
-            AnsiConsole.MarkupLine("[green]Project built and copied successfully.[/]");
+            var configuration = AnsiConsole.Confirm(Language.Prompt_UseReleaseConfiguration_) ? "Release" : "Debug";
+            if (string.IsNullOrWhiteSpace(configuration))
+            {
+                configuration = "Release";
+            }
+
+            var isDotNetCoreOrHigher = IsDotNetCoreOrHigher(projectPath);
+
+            PublishProject(projectPath, isDotNetCoreOrHigher, configuration);
+
+            CopyBuildOutputToPublishFolder(projectPath, publishFolder);
+            FinishDeploy();
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]An error occurred while processing the repository: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]{Language.Error_ProcessingRepository} {ex.Message}[/]");
         }
     }
-    
+
+    private static void FinishDeploy()
+    {
+        AnsiConsole.MarkupLine($"[green]{Language.Info_DeploymentFinish}[/]");
+        AnsiConsole.MarkupLine($"{Language.Prompt_PressToFinish}");
+        Console.ReadKey();
+        Console.Clear();
+    }
+
     private static void CopyBuildOutputToPublishFolder(string projectPath, string publishFolder)
     {
-        var buildOutputPath = Path.Combine(projectPath, "bin", "Debug","netstandard2.0");
+        AnsiConsole.MarkupLine($"[blue]{Language.Info_FileCopyStarted}[/]");
         AnsiConsole.Status().Start(Language.Info_CopyingFilesToThePublishDestinationFolder, ctx =>
         {
-            FileCopier.CopyFilesRecursively(new DirectoryInfo(buildOutputPath), new DirectoryInfo(publishFolder));
+            FileCopier.CopyFilesRecursively(new DirectoryInfo(_buildOutputPath), new DirectoryInfo(publishFolder));
             ctx.Status(Language.Info_CopyingFilesToThePublishDestinationFolder);
         });
+        AnsiConsole.MarkupLine($"[green]{Language.Info_FilesCopiedSuccessfully}[/]");
     }
-    
-    private static void SavePublishConfiguration(string repoName, string branchName, string projectName, string publishFolder)
+
+    private static void SavePublishConfiguration(string repoName, string branchName, string projectName,
+        string publishFolder)
     {
-        var repository = _config.Repositories.FirstOrDefault(x => x.Name == repoName) ?? new Repository() { Name = repoName };
-        var branch = repository.Branches.FirstOrDefault(x => x.Name == branchName) ?? new Branch() { Name = branchName };
-        var project = branch.Projects.FirstOrDefault(x => x.Name == projectName) ?? new Project() { Name = projectName, PublishFolder = publishFolder };
+        var repository = _config.Repositories.FirstOrDefault(x => x.Name == repoName) ??
+                         new Repository() { Name = repoName };
+        var branch = repository.Branches.FirstOrDefault(x => x.Name == branchName) ??
+                     new Branch() { Name = branchName };
+        var project = branch.Projects.FirstOrDefault(x => x.Name == projectName) ??
+                      new Project() { Name = projectName, PublishFolder = publishFolder };
 
         branch.Projects.Add(project);
         repository.Branches.Add(branch);
@@ -213,27 +259,36 @@ internal class Program
 
         ConfigUtil.SaveConfig(_configPath, _config);
     }
-    
+
     private static string GetPublishFolder(string branchName, string projectName, string repoName)
     {
-        var projectBranchPublishConfig = _config.Repositories
-            .SelectMany(repo => repo.Branches)
-            .SelectMany(branch => branch.Projects)
-            .FirstOrDefault(project => project.Name == projectName && !string.IsNullOrEmpty(project.PublishFolder));
+        var projectBranchPublishConfig = (from repository in _config.Repositories
+            from branch in repository.Branches
+            from project in branch.Projects
+            where branch.Name == branchName && project.Name == projectName &&
+                  !string.IsNullOrEmpty(project.PublishFolder)
+            select project).FirstOrDefault();
 
         string publishFolder;
-        if (projectBranchPublishConfig == null)
+
+        if (projectBranchPublishConfig != null)
         {
-            publishFolder = AnsiConsole.Ask<string>($"{Language.Prompt_EnterDestinationFolder}:");
-            if (AnsiConsole.Confirm(Language.Prompt_WishToSavePublishConfiguration))
+            AnsiConsole.MarkupLine($"{Language.Info_PublishFolderFound} '{projectBranchPublishConfig.PublishFolder}'");
+            var useExistingFolder = AnsiConsole.Confirm($"{Language.Prompt_WishToUseExistingPublishFolder}");
+            if (useExistingFolder)
             {
-                SavePublishConfiguration(repoName, branchName, projectName, publishFolder);
+                publishFolder = projectBranchPublishConfig.PublishFolder;
+            }
+            else
+            {
+                publishFolder = AnsiConsole.Ask<string>($"{Language.Prompt_EnterDestinationFolder}:");
+                UpdatePublishConfiguration(_config, _configPath, repoName, branchName, projectName, publishFolder);
             }
         }
         else
         {
-            publishFolder = projectBranchPublishConfig.PublishFolder;
-            AnsiConsole.MarkupLine($"Found publish configuration for project {projectName}, branch {branchName} in folder {publishFolder}");
+            publishFolder = AnsiConsole.Ask<string>($"{Language.Prompt_EnterDestinationFolder}:");
+            UpdatePublishConfiguration(_config, _configPath, repoName, branchName, projectName, publishFolder);
         }
 
         if (!Directory.Exists(publishFolder))
@@ -241,44 +296,221 @@ internal class Program
             Directory.CreateDirectory(publishFolder);
         }
 
+        AnsiConsole.MarkupLine($"{Language.Info_UsingPublishFolder} {publishFolder}");
         return publishFolder;
     }
-    
-    private static void BuildProject(string projectPath)
+
+    private static void PublishProject(string projectPath, bool isDotNetCoreOrHigher, string configuration)
+    {
+        CleanDirectory(_buildOutputPath);
+        AnsiConsole.MarkupLine($"[blue]{Language.Info_ProjectBuildStarted}[/]");
+
+        if (isDotNetCoreOrHigher)
+        {
+            PublishUsingDotNet(projectPath, configuration);
+        }
+        else
+        {
+            PublishUsingMsBuild(projectPath, configuration);
+        }
+
+        AnsiConsole.MarkupLine($"[green]{Language.Info_ProjectBuiltSuccessfully}[/]");
+    }
+
+    private static void PublishUsingDotNet(string projectPath, string configuration)
+    {
+        if (!IsDotNetAvailable())
+        {
+            AnsiConsole.MarkupLine($"[red]{Language.Error_DotNetNotFound}[/]");
+            return;
+        }
+
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = $"publish \"{projectPath}\" -c {configuration} -o \"{_buildOutputPath}\"",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        ExecuteProcess(processStartInfo);
+    }
+
+    private static void PublishUsingMsBuild(string projectPath, string configuration)
+    {
+        if (!IsDotNetAvailable())
+        {
+            AnsiConsole.MarkupLine($"[red]{Language.Error_DotNetNotFound}[/]");
+            return;
+        }
+
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = $"msbuild \"{projectPath}\" -property:Configuration={configuration}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        ExecuteProcess(processStartInfo);
+    }
+
+    private static void ExecuteProcess(ProcessStartInfo processStartInfo)
     {
         AnsiConsole.Status().Start(Language.Info_BuildingProject, ctx =>
         {
-            var buildProcess = Process.Start(new ProcessStartInfo
+            var publishProcess = Process.Start(processStartInfo);
+            publishProcess.OutputDataReceived += (_, e) =>
             {
-                FileName = "dotnet",
-                Arguments = $"build \"{projectPath}\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
+                if (e.Data != null)
+                {
+                    AnsiConsole.MarkupLine(Markup.Escape(e.Data));
+                }
+            };
+            publishProcess.ErrorDataReceived +=
+                (_, e) =>
+                {
+                    if (e.Data != null)
+                    {
+                        AnsiConsole.MarkupLine($"[red]{Markup.Escape(e.Data)}[/]");
+                    }
+                };
+            publishProcess.BeginOutputReadLine();
+            publishProcess.BeginErrorReadLine();
+            publishProcess.WaitForExit();
 
-            buildProcess!.WaitForExit();
+            if (publishProcess.ExitCode != 0)
+            {
+                throw new Exception(Language.Error_ProjectPublishFailed);
+            }
+
             ctx.Status(Language.Info_ProjectBuiltSuccessfully);
         });
     }
-    
-    private static string SelectProject(List<KeyValuePair<string, string>> projects)
+
+    private static bool IsDotNetAvailable()
     {
-        var projectsOptions = projects.Select((project, index) => new KeyValuePair<int, string>(index + 1, RemoveFileExtension(project.Value, ".csproj"))).ToList();
-        var selectedProject = Prompt.Select("Select a project", projectsOptions, null, null, kvp => $"{kvp.Key} - {kvp.Value}");
+        try
+        {
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = "--version",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(processStartInfo);
+            process.WaitForExit();
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsMsBuildAvailable()
+    {
+        try
+        {
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = "msbuild",
+                Arguments = "-version",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(processStartInfo);
+            process.WaitForExit();
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsDotNetCoreOrHigher(string projectPath)
+    {
+        var csprojFile = Directory.GetFiles(projectPath, "*.csproj").FirstOrDefault();
+        if (csprojFile == null)
+        {
+            throw new FileNotFoundException("Project file (.csproj) not found in the specified directory.");
+        }
+
+        var lines = File.ReadAllLines(csprojFile);
+        return lines.Any(line => line.Contains("<TargetFramework>netcoreapp") || line.Contains("<TargetFramework>net"));
+    }
+
+
+    private static void CleanDirectory(string directoryPath)
+    {
+        if (Directory.Exists(directoryPath))
+        {
+            var directory = new DirectoryInfo(directoryPath);
+            foreach (var file in directory.GetFiles())
+            {
+                file.Delete();
+            }
+
+            foreach (var subDirectory in directory.GetDirectories())
+            {
+                subDirectory.Delete(true);
+            }
+        }
+        else
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
+    }
+
+    private static string SelectProject(Branch branch)
+    {
+        var projectsOptions = branch.Projects
+            .OrderByDescending(project => project.LastUsed)
+            .Select((project, index) =>
+                new KeyValuePair<int, string>(index + 1, RemoveFileExtension(project.Name, ".csproj")))
+            .ToList();
+
+        var selectedProject = Prompt.Select($"{Language.Prompt_SelectProject}", projectsOptions, null, null,
+            kvp => $"{kvp.Key} - {kvp.Value}");
+
+        var project = branch.Projects.First(p => p.Name == selectedProject.Value);
+        project.LastUsed = DateTime.Now;
+        ConfigUtil.SaveConfig(_configPath, _config);
+
         return selectedProject.Value;
     }
-    
-    private static string SelectBranch(IReadOnlyList<Octokit.Branch> branches)
+
+    private static string SelectBranch(Repository repository)
     {
-        var branchesOptions = branches.Select((branch, index) => new KeyValuePair<int, string>(index + 1, branch.Name)).ToList();
-        var selectedBranch = Prompt.Select("Select a branch", branchesOptions, null, null, kvp => $"{kvp.Key} - {kvp.Value}");
+        var branchesOptions = repository.Branches
+            .OrderByDescending(branch => branch.LastUsed)
+            .Select((branch, index) => new KeyValuePair<int, string>(index + 1, branch.Name))
+            .ToList();
+
+        var selectedBranch = Prompt.Select($"{Language.Prompt_SelectBranch}", branchesOptions, null, null,
+            kvp => $"{kvp.Value}");
+
+        var branch = repository.Branches.First(b => b.Name == selectedBranch.Value);
+        branch.LastUsed = DateTime.Now;
+        ConfigUtil.SaveConfig(_configPath, _config);
+
         return selectedBranch.Value;
     }
-    
+
     private static string CloneRepository(string owner, string repo, string branchName)
     {
-        var localRepoPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Publish", repo);
+        var localRepoPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Publish",
+            repo);
 
         if (!Directory.Exists(localRepoPath))
         {
@@ -301,5 +533,61 @@ internal class Program
         });
 
         return localRepoPath;
+    }
+
+    private static void UpdatePublishConfiguration(Config config, string configPath, string repoName, string branchName,
+        string projectName, string publishFolder)
+    {
+        var repository = config.Repositories.FirstOrDefault(x => x.Name == repoName) ??
+                         new Repository { Name = repoName };
+        var branch = repository.Branches.FirstOrDefault(x => x.Name == branchName) ?? new Branch { Name = branchName };
+        var project = branch.Projects.FirstOrDefault(x => x.Name == projectName) ?? new Project { Name = projectName };
+
+        project.PublishFolder = publishFolder;
+
+        if (!config.Repositories.Contains(repository))
+        {
+            config.Repositories.Add(repository);
+        }
+
+        if (!repository.Branches.Contains(branch))
+        {
+            repository.Branches.Add(branch);
+        }
+
+        if (!branch.Projects.Contains(project))
+        {
+            branch.Projects.Add(project);
+        }
+
+        ConfigUtil.SaveConfig(configPath, config);
+    }
+
+    private static void SynchronizeBranches(Repository repository, IReadOnlyList<Octokit.Branch> githubBranches)
+    {
+        var githubBranchNames = githubBranches.Select(b => b.Name).ToList();
+        foreach (var branch in from branchName in githubBranchNames
+                 let branch = repository.Branches.FirstOrDefault(b => b.Name == branchName)
+                 where branch == null
+                 select new Branch { Name = branchName })
+        {
+            repository.Branches.Add(branch);
+        }
+
+        repository.Branches.RemoveAll(b => !githubBranchNames.Contains(b.Name));
+    }
+
+    private static void SynchronizeProjects(Branch branch, List<KeyValuePair<string, string>> csprojFiles)
+    {
+        var projectNames = csprojFiles.Select(f => RemoveFileExtension(f.Value, ".csproj")).ToList();
+        foreach (var project in from projectName in projectNames
+                 let project = branch.Projects.FirstOrDefault(p => p.Name == projectName)
+                 where project == null
+                 select new Project { Name = projectName })
+        {
+            branch.Projects.Add(project);
+        }
+
+        branch.Projects.RemoveAll(p => !projectNames.Contains(p.Name));
     }
 }

@@ -60,11 +60,83 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to DotNet (build) not found..
+        /// </summary>
+        public static string Error_DotNetNotFound {
+            get {
+                return ResourceManager.GetString("Error_DotNetNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to An error occurred while handling an existing repository.
+        /// </summary>
+        public static string Error_HandleExistingRepository {
+            get {
+                return ResourceManager.GetString("Error-HandleExistingRepository", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to An error occurred while handling a new repository:.
+        /// </summary>
+        public static string Error_HandleNewRepository {
+            get {
+                return ResourceManager.GetString("Error-HandleNewRepository", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Error - Invalid repository name format.
         /// </summary>
         public static string Error_InvalidRepositoryFormat {
             get {
                 return ResourceManager.GetString("Error-InvalidRepositoryFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to An error occurred during the main loop:.
+        /// </summary>
+        public static string Error_MainLoop {
+            get {
+                return ResourceManager.GetString("Error-MainLoop", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to MSBuild not found.
+        /// </summary>
+        public static string Error_MSBuildNotFound {
+            get {
+                return ResourceManager.GetString("Error_MSBuildNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to An error occurred while processing the repository:.
+        /// </summary>
+        public static string Error_ProcessingRepository {
+            get {
+                return ResourceManager.GetString("Error-ProcessingRepository", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project build failed..
+        /// </summary>
+        public static string Error_ProjectPublishFailed {
+            get {
+                return ResourceManager.GetString("Error_ProjectPublishFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Repository not found.
+        /// </summary>
+        public static string Error_RepositoryNotFound {
+            get {
+                return ResourceManager.GetString("Error-RepositoryNotFound", resourceCulture);
             }
         }
         
@@ -87,11 +159,47 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Copying files to the publish destination folder....
+        ///   Looks up a localized string similar to Copying files to the publish folder....
         /// </summary>
         public static string Info_CopyingFilesToThePublishDestinationFolder {
             get {
                 return ResourceManager.GetString("Info-CopyingFilesToThePublishDestinationFolder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Deployment finished!.
+        /// </summary>
+        public static string Info_DeploymentFinish {
+            get {
+                return ResourceManager.GetString("Info-DeploymentFinish", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Started file copy to publish folder..
+        /// </summary>
+        public static string Info_FileCopyStarted {
+            get {
+                return ResourceManager.GetString("Info-FileCopyStarted", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Files copied successfully..
+        /// </summary>
+        public static string Info_FilesCopiedSuccessfully {
+            get {
+                return ResourceManager.GetString("Info-FilesCopiedSuccessfully", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project build started..
+        /// </summary>
+        public static string Info_ProjectBuildStarted {
+            get {
+                return ResourceManager.GetString("Info-ProjectBuildStarted", resourceCulture);
             }
         }
         
@@ -105,11 +213,56 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Project published successfully..
+        /// </summary>
+        public static string Info_ProjectPublishedSuccessfully_ {
+            get {
+                return ResourceManager.GetString("Info_ProjectPublishedSuccessfully ", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Project publish started..
+        /// </summary>
+        public static string Info_ProjectPublishStarted_ {
+            get {
+                return ResourceManager.GetString("Info_ProjectPublishStarted ", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Publish folder found at:.
+        /// </summary>
+        public static string Info_PublishFolderFound {
+            get {
+                return ResourceManager.GetString("Info-PublishFolderFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Publishing project....
+        /// </summary>
+        public static string Info_PublishingProject_ {
+            get {
+                return ResourceManager.GetString("Info_PublishingProject ", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Repository cloned successfully..
         /// </summary>
         public static string Info_RepositoryClonedSuccessfully {
             get {
                 return ResourceManager.GetString("Info-RepositoryClonedSuccessfully", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Using publish folder:.
+        /// </summary>
+        public static string Info_UsingPublishFolder {
+            get {
+                return ResourceManager.GetString("Info-UsingPublishFolder", resourceCulture);
             }
         }
         
@@ -159,11 +312,47 @@ namespace PackageDeployer.Lang {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Press any key to finish.
+        /// </summary>
+        public static string Prompt_PressToFinish {
+            get {
+                return ResourceManager.GetString("Prompt-PressToFinish", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Select a branch.
+        /// </summary>
+        public static string Prompt_SelectBranch {
+            get {
+                return ResourceManager.GetString("Prompt-SelectBranch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Select an existing repository or create a new repository configuration.
         /// </summary>
         public static string Prompt_SelectOrCreateRepositoryConfig {
             get {
                 return ResourceManager.GetString("Prompt-SelectOrCreateRepositoryConfig", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Select a project.
+        /// </summary>
+        public static string Prompt_SelectProject {
+            get {
+                return ResourceManager.GetString("Prompt-SelectProject", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Would you like to use the Release configuration? (If not, the Debug configuration will be used instead).
+        /// </summary>
+        public static string Prompt_UseReleaseConfiguration_ {
+            get {
+                return ResourceManager.GetString("Prompt_UseReleaseConfiguration ", resourceCulture);
             }
         }
         
@@ -182,6 +371,15 @@ namespace PackageDeployer.Lang {
         public static string Prompt_WishToSavePublishConfiguration {
             get {
                 return ResourceManager.GetString("Prompt-WishToSavePublishConfiguration", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Do you wish to use the existing publish folder?.
+        /// </summary>
+        public static string Prompt_WishToUseExistingPublishFolder {
+            get {
+                return ResourceManager.GetString("Prompt-WishToUseExistingPublishFolder", resourceCulture);
             }
         }
     }
