@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageDeployer.Lang", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageDeployer.Core", "src\PackageDeployer.Core\PackageDeployer.Core.csproj", "{3239A99D-1195-4CCA-BDB7-ECC9EBA5EC01}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageDeployer.Services", "src\PackageDeployer.Services\PackageDeployer.Services.csproj", "{A416CD51-E746-4BD3-B646-3533F6A90C5C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,5 +26,9 @@ Global
 		{3239A99D-1195-4CCA-BDB7-ECC9EBA5EC01}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3239A99D-1195-4CCA-BDB7-ECC9EBA5EC01}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3239A99D-1195-4CCA-BDB7-ECC9EBA5EC01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A416CD51-E746-4BD3-B646-3533F6A90C5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A416CD51-E746-4BD3-B646-3533F6A90C5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A416CD51-E746-4BD3-B646-3533F6A90C5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A416CD51-E746-4BD3-B646-3533F6A90C5C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

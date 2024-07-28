@@ -20,6 +20,7 @@
     <ItemGroup>
       <ProjectReference Include="..\PackageDeployer.Core\PackageDeployer.Core.csproj" />
       <ProjectReference Include="..\PackageDeployer.Lang\PackageDeployer.Lang.csproj" />
+      <ProjectReference Include="..\PackageDeployer.Services\PackageDeployer.Services.csproj" />
     </ItemGroup>
 
     <ItemGroup>
