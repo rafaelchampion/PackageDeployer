@@ -1,30 +1,21 @@
 using System.Diagnostics;
+using PackageDeployer.Core.Models;
 
 namespace PackageDeployer.Services.GitService;
 
 public class GitService
 {
-    public string RepositoryName { get; set; }
-    public string RepositoriesPath { get; set; }
-
-    private string RepositoryLocalPath => $"{RepositoriesPath}/{RepositoryName}";
-
-    public string RepositoryUsername { get; set; }
-    public string RepositoryToken { get; set; }
+    private Repository Repository { get; set; }
+    private string RepositoriesPath { get; set; }
+    private string RepositoryLocalPath => $"{RepositoriesPath}/{Repository?.Suffix}";
     public bool Success { get; private set; } = true;
-    public List<string> Errors { get; set; } = [];
+    public List<string> Errors { get; private set; } = [];
     private ProcessStartInfo GitProcess;
 
-    public GitService(
-        string repositoryName,
-        string repositoriesPath,
-        string repositoryUsername,
-        string repositoryToken)
+    public GitService(Repository repository, string repositoriesPath)
     {
-        RepositoryName = repositoryName;
+        Repository = repository;
         RepositoriesPath = repositoriesPath;
-        RepositoryUsername = repositoryUsername;
-        RepositoryToken = repositoryToken;
         GitProcess = new ProcessStartInfo
         {
             WorkingDirectory = RepositoryLocalPath,
@@ -40,7 +31,7 @@ public class GitService
     {
         GitProcess.WorkingDirectory = RepositoriesPath;
         GitProcess.Arguments =
-            $"clone https://{RepositoryUsername}:{RepositoryToken}@github.com/{RepositoryName} --verbose";
+            $"clone https://{Repository.Username}:{Repository.GitHubToken}@github.com/{Repository.Name} --verbose";
         var localProcess = Process.Start(GitProcess);
         using (var processErrors = localProcess.StandardError)
         {
@@ -50,14 +41,16 @@ public class GitService
             var workingTreeErrors = Errors.Where(x => x.Contains("unable to checkout working tree")).ToList();
             if (workingTreeErrors.Count != 0)
             {
-                Errors.RemoveAll(x=> workingTreeErrors.Contains(x));
+                Errors.RemoveAll(x => workingTreeErrors.Contains(x));
                 CheckoutDefault();
             }
+
             if (Errors.Count != 0)
             {
                 Success = false;
             }
         }
+
         try
         {
             localProcess.WaitForExit();
@@ -95,13 +88,19 @@ public class GitService
         GitProcess.Arguments = $"branch -r";
         var localProcess = Process.Start(GitProcess);
         var branches = new List<string>();
-        localProcess.OutputDataReceived += (sender, args) =>
+        using (var output = localProcess.StandardOutput)
         {
-            if (args.Data != null)
+            var outputBranches = "";
+            outputBranches = output.ReadToEnd();
+            using (var sr = new StringReader(outputBranches))
             {
-                branches.Add(args.Data);
+                while (sr.ReadLine() is { } line)
+                {
+                    branches.Add(line);
+                }
             }
-        };
+        }
+
         localProcess.WaitForExit();
         return branches;
     }

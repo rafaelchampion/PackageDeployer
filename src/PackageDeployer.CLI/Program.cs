@@ -17,9 +17,9 @@ namespace PackageDeployer.CLI;
 internal class Program
 {
     private static bool _run = true;
-    private static string _buildOutputPath;
-    private static string _repositoriesPath;
-    private static string _configPath;
+    private static string _buildOutputPath = "";
+    private static string _repositoriesPath = "";
+    private static string _configPath = "";
     private static Config _config;
 
     public static async Task Main(string[] args)
@@ -65,16 +65,33 @@ internal class Program
                 MainMenuExit();
                 break;
             case 1:
+                SelectAndPublishRepository();
                 break;
             case 2:
                 break;
             case 3:
-                await HandleNewRepositoryAsync();
+                await AddNewRepositoryAsync();
                 break;
             default:
                 MainMenuExit();
                 break;
         }
+    }
+
+    private static async void SelectAndPublishRepository()
+    {
+        var options = BuildPublishMenuOptions(_config);
+        var selectedOption = Prompt.Select(Language.Prompt_SelectOrCreateRepositoryConfig, options, null, null,
+            kvp => $"{kvp.Value}");
+        var selectedRepository = _config.Repositories.FirstOrDefault(x => x.Id == selectedOption.Key);
+        if (selectedOption.Key == Guid.Empty || selectedRepository is null)
+        {
+            return;
+        }
+
+        selectedRepository.LastUsed = DateTime.Now;
+        ConfigUtil.SaveConfig(_configPath, _config);
+        await ProcessRepositoryAsync(selectedRepository);
     }
 
     private static List<KeyValuePair<ushort, string>> BuildMainMenuOptions()
@@ -108,7 +125,7 @@ internal class Program
                     MainMenuExit();
                     return;
                 case var id when id == Guid.Parse("99999999-9999-9999-9999-999999999999"):
-                    await HandleNewRepositoryAsync();
+                    await AddNewRepositoryAsync();
                     break;
                 default:
                     await HandleExistingRepositoryAsync(selectedOption);
@@ -121,12 +138,11 @@ internal class Program
         }
     }
 
-    private static async Task HandleNewRepositoryAsync()
+    private static async Task AddNewRepositoryAsync()
     {
         try
         {
-            var repository = CreateNewRepository();
-            //await ProcessRepositoryAsync(repoParts, token, repoName);
+            CreateNewRepository();
         }
         catch (Exception ex)
         {
@@ -151,7 +167,7 @@ internal class Program
             ConfigUtil.SaveConfig(_configPath, _config);
 
             var repoName = LoadExistingRepository(repositoryOption, out var repoParts, out var token);
-            await ProcessRepositoryAsync(repoParts, token, repoName);
+            //await ProcessRepositoryAsync(repoParts, token, repoName);
         }
         catch (Exception ex)
         {
@@ -165,11 +181,7 @@ internal class Program
             .OrderByDescending(repository => repository.LastUsed)
             .Select(repository => new KeyValuePair<Guid, string>(repository.Id, repository.Name))
             .ToList();
-
-        keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Parse("99999999-9999-9999-9999-999999999999"),
-            $"+++ {Language.Option_NewRepository} +++"));
         keyValuePairs.Add(new KeyValuePair<Guid, string>(Guid.Empty, $"--- {Language.Option_Exit} ---"));
-
         return keyValuePairs;
     }
 
@@ -195,7 +207,12 @@ internal class Program
             exit = !tryAgain;
         } while (repoParts.Length != 2 || exit);
 
-        var credentialsCorrect = true;
+        if (exit)
+        {
+            return null;
+        }
+
+        bool credentialsCorrect;
         do
         {
             username = AnsiConsole.Ask<string>("Enter the username for the repository");
@@ -204,7 +221,8 @@ internal class Program
             credentialsCorrect = AnsiConsole.Confirm("Are the credentials correct?");
         } while (!credentialsCorrect);
 
-        var gitService = new GitService(repoName, _repositoriesPath, username, token);
+        var repository = new Repository() { Name = repoName, Username = username, GitHubToken = token };
+        var gitService = new GitService(repository, _repositoriesPath);
         AnsiConsole.Status().Start(Language.Info_CloningRepository, ctx =>
         {
             gitService.InitializeRepository();
@@ -215,7 +233,6 @@ internal class Program
             throw new Exception($"Error initializing repository: {gitService.Errors.FirstOrDefault()}");
         }
 
-        var repository = new Repository() { Name = repoName, Username = username, GitHubToken = token };
         _config.Repositories.Add(repository);
         ConfigUtil.SaveConfig(_configPath, _config);
         return repository;
@@ -228,27 +245,24 @@ internal class Program
         return repository.Name;
     }
 
-    private static async Task ProcessRepositoryAsync(string[] repoParts, string token, string repoName)
+    private static async Task ProcessRepositoryAsync(Repository repository)
     {
-        var owner = repoParts[0];
-        var repo = repoParts[1];
-
-        var client = new GitHubClient(new ProductHeaderValue("GitHubBranchDownloader"))
-        {
-            Credentials = new Octokit.Credentials(token)
-        };
-
         try
         {
-            var repository = _config.Repositories.First(r => r.Name == repoName);
-            var githubBranches = await client.Repository.Branch.GetAll(owner, repo);
-            SynchronizeBranches(repository, githubBranches);
+            var branches = new GitService(repository, _repositoriesPath).ListRemoteBranches();
+            SynchronizeBranches(repository, branches);
             ConfigUtil.SaveConfig(_configPath, _config);
             var branchName = SelectBranch(repository);
             var branch = repository.Branches.First(b => b.Name == branchName);
             branch.LastUsed = DateTime.Now;
-            var localRepoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "repositories", repo);
-            await CloneOrUpdateRepository(owner, repo, branchName, token, localRepoPath);
+            var localRepoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "repositories", repository.Suffix);
+            var gitService = new GitService(repository, _repositoriesPath);
+            AnsiConsole.Status().Start("Synchronizing selected branch", ctx =>
+            {
+                gitService.CheckoutBranch(branchName);
+                ctx.Status("Branch synchronized");
+            });
+            //await CloneOrUpdateRepository(owner, repo, branchName, token, localRepoPath);
         }
         catch (Exception ex)
         {
@@ -324,8 +338,8 @@ internal class Program
         }
     }
 
-    private static async Task<string> CloneOrUpdateRepository(string owner, string repo, string branchName,
-        string token, string localRepoPath)
+    private static async Task<string> CloneOrUpdateRepository(Repository repository, string branchName,
+        string localRepoPath)
     {
         if (!Directory.Exists(localRepoPath))
         {
@@ -334,7 +348,7 @@ internal class Program
 
         var client = new GitHubClient(new ProductHeaderValue("GitHubBranchDownloader"))
         {
-            Credentials = new Octokit.Credentials(token)
+            Credentials = new Octokit.Credentials(repository.GitHubToken)
         };
 
         try
@@ -343,19 +357,11 @@ internal class Program
 
             if (repoDir.Exists && Directory.GetFiles(localRepoPath).Length > 0)
             {
-                var remoteCommits =
-                    await client.Repository.Commit.GetAll(owner, repo, new CommitRequest { Sha = branchName });
-                var localCommits = await GetLocalCommits(localRepoPath, branchName);
-
-                var commitsToUpdate = remoteCommits.Except(localCommits).ToList();
-                if (commitsToUpdate.Any())
-                {
-                    await UpdateRepository(localRepoPath, owner, repo, branchName);
-                }
+                new GitService(repository, _repositoriesPath).PullRepository();
             }
             else
             {
-                await CloneRepository(owner, repo, branchName, localRepoPath);
+                // await CloneRepository(owner, repo, branchName, localRepoPath);
             }
 
             return localRepoPath;
@@ -460,7 +466,7 @@ internal class Program
     {
         var options = BuildBranchOptions(repository);
         var option = Prompt.Select(Language.Prompt_SelectOrCreateBranchConfig, options, null, null,
-            kvp => $"{kvp.Value}");
+            kvp => $"{kvp.Value.Replace("origin/", "")}");
         return option.Value;
     }
 
@@ -509,10 +515,9 @@ internal class Program
             : fileName;
     }
 
-    private static void SynchronizeBranches(Repository repository, IReadOnlyList<Octokit.Branch> githubBranches)
+    private static void SynchronizeBranches(Repository repository, IList<string> branches)
     {
-        var githubBranchNames = githubBranches.Select(b => b.Name).ToList();
-        foreach (var branch in from branchName in githubBranchNames
+        foreach (var branch in from branchName in branches
                  let branch = repository.Branches.FirstOrDefault(b => b.Name == branchName)
                  where branch == null
                  select new Branch { Name = branchName })
@@ -520,7 +525,7 @@ internal class Program
             repository.Branches.Add(branch);
         }
 
-        repository.Branches.RemoveAll(b => !githubBranchNames.Contains(b.Name));
+        repository.Branches.RemoveAll(b => !branches.Contains(b.Name));
     }
 
     private static void SynchronizeProjects(Branch branch, Dictionary<string, string> csprojFiles)
