@@ -43,6 +43,7 @@ internal class Program
         {
             Directory.CreateDirectory(_repositoriesPath);
         }
+
         _config = ConfigUtil.LoadConfig(_configPath);
     }
 
@@ -124,12 +125,14 @@ internal class Program
     {
         try
         {
-            var repoName = CreateNewRepository(out var repoParts, out var token);
-            await ProcessRepositoryAsync(repoParts, token, repoName);
+            var repository = CreateNewRepository();
+            //await ProcessRepositoryAsync(repoParts, token, repoName);
         }
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]{Language.Error_HandleNewRepository}: {ex.Message}[/]");
+            AnsiConsole.MarkupLine(Language.Prompt_PressToFinish);
+            Console.ReadKey();
         }
     }
 
@@ -175,28 +178,47 @@ internal class Program
         _run = false;
     }
 
-    private static string CreateNewRepository(out string[] repoParts, out string token)
+    private static Repository CreateNewRepository()
     {
-        bool exit = false;
         string repoName;
+        string[] repoParts;
+        string username;
+        string token;
+        var exit = false;
         do
         {
             repoName = AnsiConsole.Ask<string>(Language.Prompt_EnterRepositoryName);
             repoParts = repoName.Split('/');
-            if (repoParts.Length != 2)
-            {
-                AnsiConsole.MarkupLine(Language.Error_InvalidRepositoryFormat);
-            }
+            if (repoParts.Length == 2) continue;
+            AnsiConsole.MarkupLine(Language.Error_InvalidRepositoryFormat);
+            var tryAgain = AnsiConsole.Confirm("Try again?");
+            exit = !tryAgain;
         } while (repoParts.Length != 2 || exit);
 
-        var username = AnsiConsole.Ask<string>("Enter the username for the repository");
-        token = AnsiConsole.Ask<string>(Language.Prompt_EnterGitHubToken);
-        _config.Repositories.Add(new Repository() { Name = repoName, Username = username, GitHubToken = token });
-        var gitService = new GitService(repoName, _repositoriesPath, username, token);
-        gitService.InitializeRepository();
-        ConfigUtil.SaveConfig(_configPath, _config);
+        var credentialsCorrect = true;
+        do
+        {
+            username = AnsiConsole.Ask<string>("Enter the username for the repository");
+            token = AnsiConsole.Ask<string>(Language.Prompt_EnterGitHubToken);
+            AnsiConsole.MarkupLine($"Username: {username}. Token: {token}");
+            credentialsCorrect = AnsiConsole.Confirm("Are the credentials correct?");
+        } while (!credentialsCorrect);
 
-        return repoName;
+        var gitService = new GitService(repoName, _repositoriesPath, username, token);
+        AnsiConsole.Status().Start(Language.Info_CloningRepository, ctx =>
+        {
+            gitService.InitializeRepository();
+            ctx.Status(Language.Info_RepositoryClonedSuccessfully);
+        });
+        if (!gitService.Success)
+        {
+            throw new Exception($"Error initializing repository: {gitService.Errors.FirstOrDefault()}");
+        }
+
+        var repository = new Repository() { Name = repoName, Username = username, GitHubToken = token };
+        _config.Repositories.Add(repository);
+        ConfigUtil.SaveConfig(_configPath, _config);
+        return repository;
     }
 
     private static string LoadExistingRepository(Repository repository, out string[] repoParts, out string token)
